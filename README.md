@@ -1,98 +1,93 @@
-## Inferences from Performance Graphs
+# Distributed File Conversion Service
+Computer Networks Jackfruit Problem
 
-### 1. The 64KB Sweet Spot (Network Efficiency)
-Throughput skyrockets from 4KB to 64KB chunk size but plateaus after that. 
-64KB is the optimal buffer size — anything smaller causes too much overhead 
-from frequent system calls, anything larger doesn't help because the network 
-pipe is already saturated.
+**Class:** CSE, Sem 4, Sec I
 
-### 2. CPU-Bound vs Network-Bound Operations
-PNG to JPG conversion peaks at over 15 MB/s (network-bound — fast operation, 
-bottleneck is the network). TXT to PDF is nearly flat near zero (CPU-bound — 
-ReportLab's layout engine is so intensive that network speed is irrelevant).
+**Team Members**
+* Tanmay T A (PES1UG24CS492)
+* Tejas P (PES1UG24CS497)
+* Tejas Ponnappa (PES1UG24CS498)
+* Tejasvi K S (PES1UG24CS499)
 
-### 3. Proof of Multithreading
-Aggregate throughput climbs significantly with concurrent requests — JPG to PNG 
-jumps from ~6 MB/s with 1 client to over 25 MB/s with 20 clients. If the server 
-was single-threaded, aggregate speed would stay flat. Because it increases, the 
-system is successfully parallelizing across multiple CPU cores.
+## Project Overview
+The project is a high-performance, three-tier distributed system designed for secure file conversion. Built using low-level TCP socket programming and wrapped in TLS encryption, it enables users to transform files (Images, PDFs, Text) across a network without local processing overhead on the client side.
 
-### 4. The 1MB Performance Peak (Memory Cache Effects)
-Most operations perform best at 1MB before declining toward 10MB. Files under 
-100KB suffer from TLS handshake and header warm-up overhead. Files over 1MB 
-hit memory management limits like Python garbage collection and buffer 
-reallocations.
+The system utilizes a dedicated Master-Worker architecture to ensure scalability and security, providing both a web-based UI and a headless CLI for various environment needs.
 
----
+## System Architecture
+The system is divided into three distinct layers to decouple the user interface from the processing logic:
 
-## Summary
+* **Client Layer:**
+    * `app.py`: A Streamlit-based web interface for intuitive drag-and-drop file operations.
 
-| Metric | Observation | Conclusion |
-|--------|-------------|------------|
-| Optimal Buffer | Performance plateaus at 64KB | Minimizes system call overhead |
-| Scalability | 20 clients = 4x higher aggregate speed | Multi-threading is working |
-| Bottleneck | TXT to PDF is consistently slowest | CPU-bound processing is the primary limit |
+    * `sender.py`: A CLI-based alternative for headless or automated environments.
 
----
+* **Orchestration Layer (Master):**
 
-## Architecture
+    * `master.py`: Acts as a multi-threaded TLS proxy that listens on port 5000.
 
-Three-tier distributed system using low-level TCP sockets wrapped in TLS 
-encryption.
+    * It validates authentication headers and tunnels data to the worker layer without saving files locally to ensure privacy and speed.
 
-- **protocol.py** — Defines the 94-byte fixed-length header using Python's 
-struct module. Handles MD5 checksums, auth token validation, and operation 
-codes (1–5).
-- **master.py** — Multi-threaded TLS proxy. Listens on port 5000, establishes 
-a secondary tunnel to the worker on port 6000. Validates headers before piping 
-binary data to the worker without saving locally.
-- **worker.py** — Multi-threaded processing engine. Uses Magic Numbers to 
-detect file types. Performs image transformations (Pillow), text-to-PDF 
-(ReportLab), and PDF extraction (PyPDF2). Operates entirely in-memory using 
-io.BytesIO.
-- **app.py** — Streamlit UI for drag-and-drop browser-based uploads and 
-downloads.
-- **sender.py** — CLI alternative for headless environments.
-- **benchmark.py** — Automates load testing across file size, chunk size, and 
-concurrency axes.
+* **Processing Layer (Worker):**
 
----
+    * `worker.py`: The engine of the system which uses Magic Numbers for file-type detection.
 
-## Protocol Header Format
+    * It performs conversions (via Pillow, ReportLab, and PyPDF2) entirely in-memory using io.BytesIO.
 
-94-byte Big-Endian packed binary structure for cross-platform compatibility.
+* **Utility & Protocol:**
+
+    * `protocol.py`: Defines the 94-byte fixed-length header using Python's struct module.
+
+    * `benchmark.py`: A tool for automated load testing across various file sizes, chunk sizes, and concurrency levels.
+
+## Protocol Specification
+To ensure cross-platform compatibility, the system uses a 94-byte Big-Endian packed binary structure.
 
 | Offset | Field | Size | Description |
 |--------|-------|------|-------------|
-| 0 | Version | 4B | Protocol version (e.g. v1.0) |
-| 4 | Auth Token | 32B | Padded string for authentication |
+| 0 | Version | 4B | Protocol version (e.g., v1.0) |
+| 4	| Auth Token | 32B | Padded string for authentication |
 | 36 | Checksum | 16B | MD5 hash of file body for integrity |
 | 52 | Filename | 30B | Padded original filename |
 | 82 | File Size | 8B | Unsigned 64-bit integer |
-| 90 | Operation | 4B | Conversion ID (1–5) |
+| 90 | Operation | 4B | Conversion ID (Types 1–5) |
 
----
+## How to Run 
+**Prerequisites**
+Ensure you have Python 3.x installed. It is recommended to use a virtual environment.
 
-## Bottlenecks Identified
+### Installation
+1. Install the required modules:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-- **CPU Saturation** — TXT to PDF stays near 0.5 MB/s regardless of file size 
-or concurrency due to ReportLab's layout engine.
-- **Memory Overhead** — Worker loads full file into BytesIO before processing. 
-Twenty simultaneous 50MB requests could consume over 2GB of RAM instantly.
-- **Network Handshake Latency** — Small files (100KB) show lower throughput 
-because TLS handshake and header parsing take a larger percentage of total time.
+### Execution
+1. **Initialize the Backend:** Start the Master and Worker services.
+    ```bash
+    python backend_init.py
+    ```
 
----
+2. **Launch the Interface:** Open the Streamlit dashboard.
+    ```bash
+    streamlit run app.py
+    ```
 
-## Future Optimizations
+## Performance Analysis & Conclusions
+The visualizations supporting the following conclusions can be found in the `./performance_graphs` directory of this repository.
 
-1. **Worker Pool** — Replace infinite thread spawning with ThreadPoolExecutor 
-to prevent server crashes from too many simultaneous threads.
-2. **Zero-Copy Transfers** — Use sendfile() to move data directly from disk to 
-network card, bypassing application memory.
-3. **Result Caching** — Return cached results for duplicate uploads detected 
-via MD5 checksum.
-4. **Async I/O** — Convert master.py to asyncio to handle thousands of 
-concurrent connections on a single thread.
-5. **Chunked Streaming** — Send converted chunks back to client as soon as 
-they are processed rather than waiting for the full file.
+1. **The 64KB Buffer Sweet Spot**
+Throughput increases exponentially as chunk sizes move from 4KB to 64KB. Beyond 64KB, performance plateaus, indicating it is the optimal buffer size to minimize system call overhead without over-saturating the network.
+
+2. **Operation Bottlenecks**
+    * **Network-Bound:** Fast operations like PNG to JPG conversion peak at over 15 MB/s, where the primary bottleneck is the network pipe.
+
+    * **CPU-Bound:** TXT to PDF conversion remains nearly flat near zero. The ReportLab layout engine is so intensive that network speed becomes irrelevant.
+
+3. **Scalability through Multithreading**
+The system demonstrates successful parallelization across CPU cores. Aggregate throughput for JPG to PNG conversions jumped from ~6 MB/s with 1 client to over 25 MB/s with 20 clients.
+
+4. **Memory and TLS Overhead**
+    * **Warm-up Latency:** Small files (under 100KB) suffer from TLS handshake and header parsing overhead.
+
+    * **Memory Peak:** Performance peaks at 1MB file sizes. Files over 1MB hit memory management limits such as Python’s garbage collection and buffer reallocations.
