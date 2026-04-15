@@ -64,7 +64,6 @@ def process_file_via_socket(temp_path, operation):
         return result_data, None
 
 
-# --- STREAMLIT UI ---
 st.set_page_config(page_title="Distributed File Converter", page_icon="⚙️")
 
 st.title("Secure Distributed File Converter")
@@ -117,8 +116,11 @@ if uploaded_files:
                 op_code = ops[selected_op_label]
 
             with col2:
+                # Dynamically extract input file type for the button
+                input_file_type = ext[1:].upper()
+                
                 if st.button(
-                    f"Convert {uploaded_file.name}", key=f"btn_{uploaded_file.name}"
+                    f"Convert {input_file_type} to {selected_op_label}", key=f"btn_{uploaded_file.name}"
                 ):
                     with st.spinner("Processing..."):
                         # Save to temp file so protocol.py can read it
@@ -138,12 +140,15 @@ if uploaded_files:
                             elif result_data.startswith(b"ERROR:"):
                                 st.error(result_data.decode())
                             else:
-                                # Prepare output filename
+                                # Prepare output filename and extension type
                                 name_no_ext = os.path.splitext(uploaded_file.name)[0]
                                 new_ext = EXT_MAP.get(op_code, ".bin")
                                 output_name = f"converted_{name_no_ext}{new_ext}"
+                                output_file_type = new_ext[1:].upper()
 
-                                st.success(f"Conversion Complete!")
+                                # Dynamically output the success message
+                                st.success(f"Converted {uploaded_file.name} to {output_file_type}")
+                                
                                 st.download_button(
                                     label="Download Result",
                                     data=result_data,
