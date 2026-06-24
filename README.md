@@ -1,15 +1,6 @@
 # Distributed File Conversion Service
-Computer Networks Jackfruit Problem
 
-**Class:** CSE, Sem 4, Sec I
-
-**Team Members**
-* Tanmay T A (PES1UG24CS492)
-* Tejas P (PES1UG24CS497)
-* Tejas Ponnappa (PES1UG24CS498)
-* Tejasvi K S (PES1UG24CS499)
-
-## Project Overview
+## Overview
 The project is a high-performance, three-tier distributed system designed for secure file conversion. Built using low-level TCP socket programming and wrapped in TLS encryption, it enables users to transform files (Images, PDFs, Text) across a network without local processing overhead on the client side.
 
 The system utilizes a dedicated Master-Worker architecture to ensure scalability and security, providing both a web-based UI and a headless CLI for various environment needs.
